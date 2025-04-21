@@ -8,7 +8,7 @@ BLUE='\033[1;34m'
 RESET='\033[0m'
 
 # === Script Information ===
-VERSION="2.4.4"
+VERSION="2.4.5"
 AUTHOR="RockDar 🫡"
 BUILD_DATE="2025-04-17"
 
