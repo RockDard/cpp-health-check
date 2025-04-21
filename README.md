@@ -1,8 +1,8 @@
 # 🩺 cpp-health-check
 
-**Bash script for static analysis of C/C++ code using `cppcheck`, with HTML and PDF reports**  
+**Bash script for static analysis of C/C++ code using `cppcheck`, with HTML/PDF reports and CMake support**  
 Author: RockDar 🫡  
-Version: 2.3.8  
+Version: 2.4.2  
 Build Date: 2025-04-17
 
 > ⚠️ **Platform:** Linux only  
@@ -16,6 +16,8 @@ Build Date: 2025-04-17
 sudo apt update
 sudo apt install cppcheck cppcheck-htmlreport xmlstarlet wkhtmltopdf
 ```
+
+Alternatively for PDF: `chromium-browser` or `google-chrome`.
 
 ---
 
@@ -32,20 +34,20 @@ chmod +x run_cppcheck.sh
 ## 🚀 Usage
 
 ```bash
-./run_cppcheck.sh [project_path] [--std=c++17] [--open]
+./run_cppcheck.sh [project_path] [--std=c++17] [--open] [--cmake]
 ```
 
-If no arguments are passed, the script will ask for the path, C++ standard, and whether to open the report.
+If no arguments are provided, the script will prompt you interactively.
 
 ---
 
 ## 🧪 Features
 
 - HTML report generation
-- PDF export support (via `wkhtmltopdf`)
-- Interactive filtering (by severity and ID)
+- PDF export via `wkhtmltopdf`, Chromium, or Chrome
+- Interactive report filtering (by severity and ID)
 - English and Russian language support
-- Interactive user prompts
+- CMake integration (`compile_commands.json`)
 
 ---
 
@@ -55,7 +57,7 @@ If no arguments are passed, the script will ask for the path, C++ standard, and 
 - name: Run cppcheck
   run: |
     chmod +x run_cppcheck.sh
-    ./run_cppcheck.sh ./src --std=c++17
+    ./run_cppcheck.sh ./src --std=c++17 --cmake
 ```
 
 ---
