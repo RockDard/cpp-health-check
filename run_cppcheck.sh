@@ -153,6 +153,15 @@ if [[ -f "CMakeLists.txt" ]] && [[ "$USE_CMAKE" == true ]]; then
     echo "[$(date)] CMake generated compile_commands.json" >> "$LOG_FILE"
 fi
 
+# Caching: skip analysis if no source changes
+if [[ -f "$TMP_XML_RAW" && -f "$REPORT_DIR/index.html" ]]; then
+    if ! find . -type f \( -name '*.cpp' -o -name '*.h' \) -newer "$REPORT_DIR/index.html" | grep -q .; then
+        echo -e "${YELLOW}⚡ No source changes since last run. Using cached report.${RESET}"
+        echo -e "${GREEN}${MSG_REPORT_READY_LABEL:-Report ready:} $PROJECT_PATH/$REPORT_DIR/index.html${RESET}"
+        exit 0
+    fi
+fi
+
 # Cleanup and Create Directories
 rm -rf "$REPORT_DIR" "$TMP_XML_RAW" "$LOG_FILE"
 mkdir -p "$REPORT_DIR"
