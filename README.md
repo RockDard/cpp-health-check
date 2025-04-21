@@ -1,42 +1,29 @@
-A utility for static analysis of C/C++ code using cppcheck. The script is written in Bash and can be used manually or as part of automated CI/CD pipelines. Author: RockDar 🫡 Version: 1.0
-
 # 🩺 cpp-health-check
 
-**Bash script for static analysis of C/C++ code using `cppcheck`**  
+**Bash script for static analysis of C/C++ code using `cppcheck`, with HTML and PDF reports**  
 Author: RockDar 🫡  
-Version: 1.0
+Version: 2.3.8  
+Build Date: 2025-04-17
+
+> ⚠️ **Platform:** Linux only  
+> This script is designed for Linux and may not work on Windows or macOS.
 
 ---
 
 ## 📦 Dependencies
 
-Make sure `cppcheck` is installed on your system.
-
 ```bash
 sudo apt update
-sudo apt install cppcheck
-```
-
-Check installation:
-
-```bash
-cppcheck --version
+sudo apt install cppcheck cppcheck-htmlreport xmlstarlet wkhtmltopdf
 ```
 
 ---
 
 ## 📁 Installation
 
-Clone the repository:
-
 ```bash
 git clone https://github.com/RockDard/cpp-health-check.git
 cd cpp-health-check
-```
-
-Make the script executable:
-
-```bash
 chmod +x run_cppcheck.sh
 ```
 
@@ -44,67 +31,35 @@ chmod +x run_cppcheck.sh
 
 ## 🚀 Usage
 
-### 🔹 Basic usage
-
-Analyze the current directory:
-
 ```bash
-./run_cppcheck.sh
+./run_cppcheck.sh [project_path] [--std=c++17] [--open]
 ```
 
-### 🔹 Analyze a specific folder
-
-```bash
-./run_cppcheck.sh path/to/your/project
-```
-
-### 🔹 Use additional `cppcheck` options
-
-```bash
-./run_cppcheck.sh ./src --enable=all --inconclusive --force
-```
+If no arguments are passed, the script will ask for the path, C++ standard, and whether to open the report.
 
 ---
 
-## 🧪 Example output
+## 🧪 Features
 
-```bash
-Checking: ./src
-[./src/main.cpp:24]: (style) The scope of the variable 'result' can be reduced.
-[./src/utils.cpp:10]: (performance) Consider using prefix ++/-- operators for performance.
-```
+- HTML report generation
+- PDF export support (via `wkhtmltopdf`)
+- Interactive filtering (by severity and ID)
+- English and Russian language support
+- Interactive user prompts
 
 ---
 
-## 🔧 CI/CD Integration (GitHub Actions)
+## 🔧 CI/CD Integration
 
 ```yaml
 - name: Run cppcheck
   run: |
     chmod +x run_cppcheck.sh
-    ./run_cppcheck.sh ./src --enable=all
+    ./run_cppcheck.sh ./src --std=c++17
 ```
-
----
-
-## 🧼 What the script does
-
-- Checks if `cppcheck` is installed
-- Runs analysis for the specified directory (or current by default)
-- Forwards all arguments directly to `cppcheck`
-- Outputs readable results
-
----
-
-## ❗ Possible errors
-
-| Error | Solution |
-|-------|----------|
-| `cppcheck: command not found` | Install `cppcheck` |
-| `Permission denied` | Run `chmod +x run_cppcheck.sh` |
 
 ---
 
 ## 📄 License
 
-MIT — free to use, but don’t forget RockDar 🫡
+MIT — free to use with credit to RockDar 🫡
