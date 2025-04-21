@@ -8,7 +8,7 @@ BLUE='\033[1;34m'
 RESET='\033[0m'
 
 # === Script Information ===
-VERSION="2.3.8"
+VERSION="2.4.2"
 AUTHOR="RockDar 🫡"
 BUILD_DATE="2025-04-17"
 
@@ -24,7 +24,7 @@ if [[ "$LANG" == "ru" ]]; then
     MSG_VERSION_LABEL="Версия:"
     MSG_BUILD_LABEL="Дата сборки:"
     MSG_AUTHOR_LABEL="Автор:"
-    MSG_USAGE="📌 Использование: $0 [path] [--std=c++17] [--open]"
+    MSG_USAGE="📌 Использование: $0 [path] [--std=c++17] [--open] [--cmake]"
     MSG_DEP_NOT_FOUND="не найден. Установите зависимость и попробуйте снова."
     MSG_PDF_NOT_FOUND="⚠️ wkhtmltopdf не найден. PDF-экспорт отключен."
     MSG_ENTER_PATH="🗂 Укажите путь к проекту: "
@@ -47,7 +47,7 @@ else
     MSG_VERSION_LABEL="Version:"
     MSG_BUILD_LABEL="Build date:"
     MSG_AUTHOR_LABEL="Author:"
-    MSG_USAGE="📌 Usage: $0 [path] [--std=c++17] [--open]"
+    MSG_USAGE="📌 Usage: $0 [path] [--std=c++17] [--open] [--cmake]"
     MSG_DEP_NOT_FOUND="not found. Please install dependency and try again."
     MSG_PDF_NOT_FOUND="⚠️ wkhtmltopdf not found. PDF export disabled."
     MSG_ENTER_PATH="🗂 Enter project path: "
@@ -83,22 +83,31 @@ for cmd in cppcheck cppcheck-htmlreport xmlstarlet; do
     fi
 done
 
-# wkhtmltopdf Check (optional)
+# wkhtmltopdf Check (optional) and alternative PDF engines
 PDF_AVAILABLE=true
-if ! command -v wkhtmltopdf &>/dev/null; then
-    echo -e "${YELLOW}${MSG_PDF_NOT_FOUND}${RESET}"
+if command -v wkhtmltopdf &>/dev/null; then
+    PDF_TOOL="wkhtmltopdf"
+elif command -v chromium-browser &>/dev/null; then
+    PDF_TOOL="chromium"
+elif command -v google-chrome &>/dev/null; then
+    PDF_TOOL="chrome"
+else
+    echo -e "${YELLOW}⚠️ wkhtmltopdf, chromium-browser or google-chrome not found. PDF export disabled.${RESET}"
     PDF_AVAILABLE=false
 fi
 
 # Default Parameters
 STD="c++17"
 OPEN_REPORT=false
+USE_CMAKE=false
+BUILD_DIR=""
 
 # Argument Parsing
 for arg in "$@"; do
     case $arg in
         --std=*) STD="${arg#*=}";;
         --open) OPEN_REPORT=true;;
+        --cmake) USE_CMAKE=true;;
     esac
 done
 
@@ -120,6 +129,27 @@ LOG_FILE="cppcheck_log.txt"
 # Change to Project Directory
 cd "$PROJECT_PATH" || { echo -e "${RED}❌ Failed to change directory to $PROJECT_PATH${RESET}"; exit 1; }
 
+# CMake detection and prompt
+if [[ -f "CMakeLists.txt" ]]; then
+    read -p "CMakeLists.txt detected. Use CMake compilation database? [y/N]: " CMAKE_IN
+    if [[ "$CMAKE_IN" =~ ^[Yy]$ ]]; then
+        USE_CMAKE=true
+    fi
+fi
+
+# CMake integration: generate compile_commands.json if requested
+if [[ -f "CMakeLists.txt" ]] && [[ "$USE_CMAKE" == true ]]; then
+    BUILD_DIR="build"
+    mkdir -p "$BUILD_DIR"
+    # Configure with CMake
+    cmake -S . -B "$BUILD_DIR" -DCMAKE_EXPORT_COMPILE_COMMANDS=ON >> "$LOG_FILE" 2>&1
+    echo "[$(date)] CMake configured" >> "$LOG_FILE"
+    # Build the project
+    cmake --build "$BUILD_DIR" >> "$LOG_FILE" 2>&1
+    echo "[$(date)] CMake build complete" >> "$LOG_FILE"
+    echo "[$(date)] CMake generated compile_commands.json" >> "$LOG_FILE"
+fi
+
 # Cleanup and Create Directories
 rm -rf "$REPORT_DIR" "$TMP_XML_RAW" "$LOG_FILE"
 mkdir -p "$REPORT_DIR"
@@ -130,7 +160,12 @@ echo "[$(date)] Script started" > "$LOG_FILE"
 # === Run Cppcheck and Generate XML ===
 echo -e "${BLUE}${MSG_ANALYSIS}${RESET}"
 echo "[$(date)] Starting Cppcheck analysis..." >> "$LOG_FILE"
-cppcheck --enable=all --std="$STD" --xml --xml-version=2 . 2> "$TMP_XML_RAW"
+if [[ "$USE_CMAKE" == true && -f "$BUILD_DIR/compile_commands.json" ]]; then
+    cppcheck --project="$BUILD_DIR/compile_commands.json" --enable=all --xml --xml-version=2 2> "$TMP_XML_RAW"
+else
+    cppcheck --enable=all --std="$STD" --xml --xml-version=2 . 2> "$TMP_XML_RAW"
+fi
+
 echo "[$(date)] XML analysis complete." >> "$LOG_FILE"
 
 # === Generate HTML Report ===
@@ -173,13 +208,29 @@ if [[ "$OPEN_REPORT" == true ]]; then
 fi
 
 # Export to PDF
-if $PDF_AVAILABLE; then
+if [[ "$PDF_AVAILABLE" == true ]]; then
     read -p "$MSG_PDF_PROMPT" CREATE_PDF
     if [[ "$CREATE_PDF" =~ ^[Yy]$ ]]; then
-        wkhtmltopdf "$REPORT_DIR/index.html" "$REPORT_DIR/report.pdf"
-        echo -e "${GREEN}📁 PDF saved as: $REPORT_DIR/report.pdf${RESET}"
-        echo "[$(date)] PDF generated" >> "$LOG_FILE"
+        case "$PDF_TOOL" in
+            wkhtmltopdf)
+                wkhtmltopdf "$REPORT_DIR/index.html" "$REPORT_DIR/report.pdf"
+                ;;
+            chromium)
+                chromium-browser --headless --disable-gpu --print-to-pdf="$REPORT_DIR/report.pdf" "file://$PROJECT_PATH/$REPORT_DIR/index.html"
+                ;;
+            chrome)
+                google-chrome --headless --disable-gpu --print-to-pdf="$REPORT_DIR/report.pdf" "file://$PROJECT_PATH/$REPORT_DIR/index.html"
+                ;;
+        esac
+        if [[ -f "$REPORT_DIR/report.pdf" ]]; then
+            echo -e "${GREEN}📁 PDF saved as: $PROJECT_PATH/$REPORT_DIR/report.pdf${RESET}"
+            echo "[$(date)] PDF generated by $PDF_TOOL" >> "$LOG_FILE"
+        else
+            echo -e "${RED}❌ Failed to generate PDF using $PDF_TOOL.${RESET}"
+        fi
     fi
+else
+    echo -e "${YELLOW}⚠️ PDF export not available. Install wkhtmltopdf or Chromium/Chrome browser.${RESET}"
 fi
 
 # Filter and Generate Filtered Report
@@ -205,14 +256,28 @@ if [[ "$FILTER_AGREE" =~ ^[Yy]$ ]]; then
         echo -e "${GREEN}${MSG_FILTERED_READY} $PROJECT_PATH/$FILTER_DIR/index.html${RESET}"
         read -p "📄 Open filtered report? [y/N]: " OPEN_FILTERED
         if [[ "$OPEN_FILTERED" =~ ^[Yy]$ ]]; then
-            xdg-open "$FILTER_DIR/index.html" &>/dev/null &
+            xdg-open "$PROJECT_PATH/$FILTER_DIR/index.html" &>/dev/null &
         fi
-        if $PDF_AVAILABLE; then
+        if [[ "$PDF_AVAILABLE" == true ]]; then
             read -p "📄 Save PDF of filtered report? [y/N]: " PDF_FILTERED
             if [[ "$PDF_FILTERED" =~ ^[Yy]$ ]]; then
-                wkhtmltopdf "$FILTER_DIR/index.html" "$FILTER_DIR/report.pdf"
-                echo -e "${GREEN}📁 PDF saved as: $PROJECT_PATH/$FILTER_DIR/report.pdf${RESET}"
-                echo "[$(date)] PDF of filtered report generated" >> "$LOG_FILE"
+                case "$PDF_TOOL" in
+                    wkhtmltopdf)
+                        wkhtmltopdf "$FILTER_DIR/index.html" "$FILTER_DIR/report.pdf"
+                        ;;
+                    chromium)
+                        chromium-browser --headless --disable-gpu --print-to-pdf="$FILTER_DIR/report.pdf" "file://$PROJECT_PATH/$FILTER_DIR/index.html"
+                        ;;
+                    chrome)
+                        google-chrome --headless --disable-gpu --print-to-pdf="$FILTER_DIR/report.pdf" "file://$PROJECT_PATH/$FILTER_DIR/index.html"
+                        ;;
+                esac
+                if [[ -f "$FILTER_DIR/report.pdf" ]]; then
+                    echo -e "${GREEN}📁 PDF saved as: $PROJECT_PATH/$FILTER_DIR/report.pdf${RESET}"
+                    echo "[$(date)] PDF of filtered report generated by $PDF_TOOL" >> "$LOG_FILE"
+                else
+                    echo -e "${RED}❌ Failed to generate filtered PDF using $PDF_TOOL.${RESET}"
+                fi
             fi
         fi
     else
