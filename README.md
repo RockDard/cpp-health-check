@@ -2,8 +2,8 @@
 
 **Bash script for static analysis of C/C++ code using `cppcheck`, with HTML/PDF reports and CMake support**  
 Author: RockDar 🫡  
-Version: 2.4.2  
-Build Date: 2025-04-17
+Version: 2.4.7  
+Build Date: 2025-04-22
 
 > ⚠️ **Platform:** Linux only  
 > This script is designed for Linux and may not work on Windows or macOS.
