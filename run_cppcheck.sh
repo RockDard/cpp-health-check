@@ -8,9 +8,9 @@ BLUE='\033[1;34m'
 RESET='\033[0m'
 
 # === Script Information ===
-VERSION="2.4.5"
+VERSION="2.4.7"
 AUTHOR="RockDar 🫡"
-BUILD_DATE="2025-04-17"
+BUILD_DATE="2025-04-24"
 
 # Language Selection (default English)
 read -p "Select interface language (en/ru) [en]: " LANG
