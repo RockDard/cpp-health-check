@@ -49,7 +49,7 @@ chmod +x run_cppcheck.sh
 
 ---
 
-## 🧪 New Features in v3.0.1
+## 🧪 New Features in v3.1.1
 
 - **Automatic dependency installation** via popular package managers.  
 - **XML report validation** to ensure `cppcheck` output is well-formed before HTML generation.  
