@@ -25,7 +25,9 @@ if [[ "$LANG" == "ru" ]]; then
     MSG_BUILD_LABEL="Дата сборки:"
     MSG_AUTHOR_LABEL="Автор:"
     MSG_USAGE="📌 Использование: $0 [path] [--std=c++17] [--open] [--cmake]"
-    MSG_DEP_NOT_FOUND="не найден. Установите зависимость и попробуйте снова."
+    MSG_DEP_INSTALLING="🔧 Устанавливаю %s..."
+    MSG_DEP_NOT_FOUND="не найден. Попытка установки..."
+    MSG_DEP_FAIL="❌ Не удалось установить %s. Пожалуйста, установите вручную и попробуйте снова."
     MSG_PDF_NOT_FOUND="⚠️ wkhtmltopdf не найден. PDF-экспорт отключен."
     MSG_ENTER_PATH="🗂 Укажите путь к проекту: "
     MSG_ENTER_STD="📘 Стандарт C++ (по умолчанию c++17): "
@@ -48,7 +50,9 @@ else
     MSG_BUILD_LABEL="Build date:"
     MSG_AUTHOR_LABEL="Author:"
     MSG_USAGE="📌 Usage: $0 [path] [--std=c++17] [--open] [--cmake]"
-    MSG_DEP_NOT_FOUND="not found. Please install dependency and try again."
+    MSG_DEP_INSTALLING="🔧 Installing %s..."
+    MSG_DEP_NOT_FOUND="not found. Attempting to install..."
+    MSG_DEP_FAIL="❌ Failed to install %s. Please install it manually and try again."
     MSG_PDF_NOT_FOUND="⚠️ wkhtmltopdf not found. PDF export disabled."
     MSG_ENTER_PATH="🗂 Enter project path: "
     MSG_ENTER_STD="📘 C++ standard (default c++17): "
@@ -70,18 +74,46 @@ echo -e "${BLUE}${MSG_GREETING_FRAME_TOP}${RESET}"
 echo -e "${BLUE}${MSG_GREETING_FRAME_MID}${RESET}"
 echo -e "${BLUE}${MSG_GREETING_FRAME_BOT}${RESET}"
 echo
-echo
+
 echo -e "${GREEN}${MSG_VERSION_LABEL}${RESET}     $VERSION"
 echo -e "${GREEN}${MSG_BUILD_LABEL}${RESET} $BUILD_DATE"
 echo -e "${GREEN}${MSG_AUTHOR_LABEL}${RESET}      $AUTHOR"
 echo
  echo -e "${YELLOW}${MSG_USAGE}${RESET}"
 
-# Dependency Check
-for cmd in cppcheck cppcheck-htmlreport xmlstarlet; do
+# === Function to install dependencies ===
+install_dep() {
+    pkg="$1"
+    # detect package manager
+    if command -v apt-get &>/dev/null; then
+        install_cmd="sudo apt-get update && sudo apt-get install -y $pkg"
+    elif command -v yum &>/dev/null; then
+        install_cmd="sudo yum install -y $pkg"
+    elif command -v brew &>/dev/null; then
+        install_cmd="brew install $pkg"
+    else
+        return 1
+    fi
+    printf "${YELLOW}${MSG_DEP_INSTALLING}${RESET}\n" "$pkg"
+    eval "$install_cmd"
+}
+
+# Dependency Check with auto-install
+for item in "cppcheck cppcheck" "cppcheck-htmlreport cppcheck-htmlreport" "xmlstarlet xmlstarlet"; do
+    set -- $item
+    cmd=$1
+    pkg=$2
     if ! command -v "$cmd" &>/dev/null; then
-        echo -e "${RED}❌ '$cmd' ${MSG_DEP_NOT_FOUND}${RESET}"
-        exit 1
+        printf "${RED}❌ '%s' ${MSG_DEP_NOT_FOUND}${RESET}\n" "$cmd"
+        if install_dep "$pkg"; then
+            if ! command -v "$cmd" &>/dev/null; then
+                printf "${RED}${MSG_DEP_FAIL}${RESET}\n" "$cmd"
+                exit 1
+            fi
+        else
+            printf "${RED}${MSG_DEP_FAIL}${RESET}\n" "$cmd"
+            exit 1
+        fi
     fi
 done
 
@@ -94,7 +126,7 @@ elif command -v chromium-browser &>/dev/null; then
 elif command -v google-chrome &>/dev/null; then
     PDF_TOOL="chrome"
 else
-    echo -e "${YELLOW}⚠️ wkhtmltopdf, chromium-browser or google-chrome not found. PDF export disabled.${RESET}"
+    echo -e "${YELLOW}${MSG_PDF_NOT_FOUND}${RESET}"
     PDF_AVAILABLE=false
 fi
 
@@ -157,7 +189,7 @@ fi
 if [[ -f "$TMP_XML_RAW" && -f "$REPORT_DIR/index.html" ]]; then
     if ! find . -type f \( -name '*.cpp' -o -name '*.h' \) -newer "$REPORT_DIR/index.html" | grep -q .; then
         echo -e "${YELLOW}⚡ No source changes since last run. Using cached report.${RESET}"
-        echo -e "${GREEN}${MSG_REPORT_READY_LABEL:-Report ready:} $PROJECT_PATH/$REPORT_DIR/index.html${RESET}"
+        echo -e "${GREEN}${MSG_REPORT_READY_LABEL} $PROJECT_PATH/$REPORT_DIR/index.html${RESET}"
         exit 0
     fi
 fi
@@ -168,13 +200,10 @@ mkdir -p "$REPORT_DIR"
 
 # Logging Start
 echo "[$(date)] Script started" > "$LOG_FILE"
-# Timing initialization
 START_ALL=$(date +%s)
 
 # === Run Cppcheck and Generate XML ===
-# Start Cppcheck timing
 START_CPP=$(date +%s)
-
 echo -e "${BLUE}${MSG_ANALYSIS}${RESET}"
 echo "[$(date)] Starting Cppcheck analysis..." >> "$LOG_FILE"
 if [[ "$USE_CMAKE" == true && -f "$BUILD_DIR/compile_commands.json" ]]; then
@@ -182,9 +211,7 @@ if [[ "$USE_CMAKE" == true && -f "$BUILD_DIR/compile_commands.json" ]]; then
 else
     cppcheck --enable=all --std="$STD" --xml --xml-version=2 . 2> "$TMP_XML_RAW"
 fi
-
 echo "[$(date)] XML analysis complete." >> "$LOG_FILE"
-# End Cppcheck timing
 END_CPP=$(date +%s)
 DUR_CPP=$((END_CPP-START_CPP))
 echo "[$(date)] Cppcheck duration: ${DUR_CPP}s" >> "$LOG_FILE"
@@ -192,19 +219,15 @@ echo "[$(date)] Cppcheck duration: ${DUR_CPP}s" >> "$LOG_FILE"
 # === Generate HTML Report ===
 echo -e "${BLUE}${MSG_GENERATE_HTML}${RESET}"
 echo "[$(date)] Generating HTML report..." >> "$LOG_FILE"
-cppcheck-htmlreport --file="$TMP_XML_RAW" --report-dir="$REPORT_DIR" --source-dir="." >> "$LOG_FILE" 2>&1
+cmpcheck-htmlreport --file="$TMP_XML_RAW" --report-dir="$REPORT_DIR" --source-dir="." >> "$LOG_FILE" 2>&1
 HTML_EXIT=$?
 echo "[$(date)] cppcheck-htmlreport exit code: $HTML_EXIT" >> "$LOG_FILE"
-
-# Timing: end HTML generation
 END_HTML=$(date +%s)
 DUR_HTML=$((END_HTML - END_CPP))
 echo "[$(date)] HTML generation duration: ${DUR_HTML}s" >> "$LOG_FILE"
 
-# Error Count
 ERROR_COUNT=$(grep -c '<error ' "$TMP_XML_RAW")
 
-# Check Generation Results
 if [[ $HTML_EXIT -ne 0 ]]; then
     echo -e "${RED}❌ HTML generation failed (exit code $HTML_EXIT). See log: $PROJECT_PATH/$LOG_FILE${RESET}"
     exit 1
@@ -214,16 +237,13 @@ if [[ ! -f "$REPORT_DIR/index.html" ]]; then
     exit 1
 fi
 
-# Check Error Files (0.html, 1.html, etc.)
 if ! find "$REPORT_DIR" -maxdepth 1 -type f -name '[0-9]*.html' | grep -q .; then
     echo -e "${YELLOW}⚠️ No individual error files found in $PROJECT_PATH/$REPORT_DIR${RESET}"
 fi
 
-# Timing: end all processing
 END_ALL=$(date +%s)
 DUR_ALL=$((END_ALL - START_ALL))
 
-# Timing Summary
 echo
 echo -e "${BLUE}=== Timing Summary ===${RESET}"
 echo
@@ -232,11 +252,9 @@ echo "HTML report generation: ${DUR_HTML}s"
 echo "Total time: ${DUR_ALL}s"
 echo
 
-# Output Results
-echo -e "${GREEN}${MSG_REPORT_READY_LABEL:-Report ready:} $PROJECT_PATH/$REPORT_DIR/index.html${RESET}"
-echo -e "${YELLOW}${MSG_ERRORS_FOUND_LABEL:-Errors found:} $ERROR_COUNT${RESET}"
+echo -e "${GREEN}${MSG_REPORT_READY_LABEL} $PROJECT_PATH/$REPORT_DIR/index.html${RESET}"
+echo -e "${YELLOW}${MSG_ERRORS_FOUND_LABEL} $ERROR_COUNT${RESET}"
 
-# Open Report in Browser
 if [[ "$OPEN_REPORT" == true ]]; then
     if command -v xdg-open &>/dev/null; then
         nohup xdg-open "$REPORT_DIR/index.html" >/dev/null 2>&1 &
@@ -246,7 +264,6 @@ if [[ "$OPEN_REPORT" == true ]]; then
     fi
 fi
 
-# Export to PDF
 if [[ "$PDF_AVAILABLE" == true ]]; then
     read -p "$MSG_PDF_PROMPT" CREATE_PDF
     if [[ "$CREATE_PDF" =~ ^[Yy]$ ]]; then
@@ -272,7 +289,6 @@ else
     echo -e "${YELLOW}⚠️ PDF export not available. Install wkhtmltopdf or Chromium/Chrome browser.${RESET}"
 fi
 
-# Filter and Generate Filtered Report
 read -p "$MSG_FILTER_PROMPT" FILTER_AGREE
 if [[ "$FILTER_AGREE" =~ ^[Yy]$ ]]; then
     echo -e "${YELLOW}${MSG_FILTER_TITLE}${RESET}"
